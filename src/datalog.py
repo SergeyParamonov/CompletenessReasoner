@@ -2,6 +2,8 @@ from collections import defaultdict
 import numpy as np
 import operator
 import sys
+import time
+from multiprocessing import Pool
 
 
 class CompletenessSolver():
@@ -15,19 +17,36 @@ class CompletenessSolver():
       grounding_set = self.parser.parse_atoms(query_str)
       self.grounder = Grounder(grounding_set)
 
+  def process_rules(self,data):
+    inferred = 0
+    for indx, line in enumerate(data):
+      rule = self.parser.parse_rule(line)
+      grounded_rules = self.grounder.ground_rule(rule)
+      inferred += len(grounded_rules)
+    return inferred
+
+  def split_tcs(self,data,k):
+    size = len(data)   
+    chunk_size = int(np.ceil(size/float(k)))
+    chunks = []
+    for i in range(k):
+      left_bound = i*chunk_size
+      if (i+1)*chunk_size >= size:
+        right_bound = size
+      else:
+        right_bound = (i+1)*chunk_size
+      chunks.append(data[left_bound:right_bound])
+    return chunks
+
 
   def read_ASP_TCs(self,filename):
     with open(filename, "r") as tc_file:
       data = tc_file.read().splitlines()
-      all_grounded_rules = 0
-      for indx,line in enumerate(data):
-        if indx % 10**5 == 0:
-          print(indx)
-          sys.stdout.flush()
-        rule = self.parser.parse_rule(line)
-        grounded_rules = self.grounder.ground_rule(rule)
-        all_grounded_rules += len(grounded_rules)
-      return all_grounded_rules  
+      k = 8
+      pool = Pool(k)
+      data_list = self.split_tcs(data,k)
+      inferred = pool.map(self.process_rules, data_list)
+      return inferred
 
 class Grounder():
 
@@ -188,17 +207,18 @@ class Atom():
     return self.__out_str
 
 def run_test1():
+  t0 = time.time()
   solver = CompletenessSolver()
   experiment_folder = "../experiments/test1/"
   solver.read_query(experiment_folder+"query")
   grounded_tcs = solver.read_ASP_TCs(experiment_folder+"tcs")
   print(grounded_tcs)
-
-
-
+  t1 = time.time()
+  total_n = t1-t0
+  print("Total seconds {}".format(str(total_n)))
 
 def main():
-  pass
+  run_test1()
  
 if __name__ == "__main__":
   main()
