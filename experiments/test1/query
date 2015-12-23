@@ -1,1 +1,1 @@
-pupil(n1,c1,s1). class(c1,s1,l1,b1). school(s1,sc1,h1).
+pupil(n, c, s). class(c, s, 1, b). school(s, sc, t). schoolcluster(sc, d, pub).

@@ -9,6 +9,8 @@ from multiprocessing import Pool
 
 class CompletenessSolver():
 
+  num_of_cores_to_use = 10
+
   def infer_rule(self,rule,grounding_set):
     head, body = rule.get_tuple()
     body_set   = set(body)
@@ -63,7 +65,7 @@ class CompletenessSolver():
   def read_ASP_TCs(self,filename):
     with open(filename, "r") as tc_file:
       data = tc_file.read().splitlines()
-      k = 4
+      k = self.num_of_cores_to_use
       pool = Pool(k)
       data_list = self.split_tcs(data,k)
       inferred_list = pool.map(self.process_rules, data_list)
@@ -245,7 +247,7 @@ def run_test1():
 
 def main():
   C=1000 
-  S=10000
+  S=1000
   print('generating C={C}, S={S}'.format(C=C,S=S))
   generate_test1(C,S)
   print('running')
