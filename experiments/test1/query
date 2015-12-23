@@ -1,1 +1,0 @@
-pupil(n, c, s). class(c, s, 1, b). school(s, sc, t). schoolcluster(sc, d, pub).
