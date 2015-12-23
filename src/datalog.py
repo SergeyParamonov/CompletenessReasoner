@@ -39,11 +39,19 @@ class CompletenessSolver():
       self.grounder = Grounder(grounding_set)
 
   def process_rules(self,data):
+<<<<<<< HEAD
     inferred = set()
     for indx, line in enumerate(data):
       rule = self.parser.parse_rule(line)
       grounded_rules = self.grounder.ground_rule(rule)
       inferred = inferred.union(self.infer(grounded_rules))
+=======
+    inferred = 0
+    for indx, line in enumerate(data):
+      rule = self.parser.parse_rule(line)
+      grounded_rules = self.grounder.ground_rule(rule)
+      inferred += len(grounded_rules)
+>>>>>>> 882b76cb1414e79b191d29d19f6840b7c939213f
     return inferred
 
   def split_tcs(self,data,k):
@@ -63,6 +71,7 @@ class CompletenessSolver():
   def read_ASP_TCs(self,filename):
     with open(filename, "r") as tc_file:
       data = tc_file.read().splitlines()
+<<<<<<< HEAD
       k = 4
       pool = Pool(k)
       data_list = self.split_tcs(data,k)
@@ -70,6 +79,12 @@ class CompletenessSolver():
       inferred = set()
       for fact_set in inferred_list:
         inferred = inferred.union(fact_set)
+=======
+      k = 8
+      pool = Pool(k)
+      data_list = self.split_tcs(data,k)
+      inferred = pool.map(self.process_rules, data_list)
+>>>>>>> 882b76cb1414e79b191d29d19f6840b7c939213f
       return inferred
 
 class Grounder():
@@ -244,11 +259,14 @@ def run_test1():
   print("Total seconds {}".format(str(total_n)))
 
 def main():
+<<<<<<< HEAD
   C=1000 
   S=10000
   print('generating C={C}, S={S}'.format(C=C,S=S))
   generate_test1(C,S)
   print('running')
+=======
+>>>>>>> 882b76cb1414e79b191d29d19f6840b7c939213f
   run_test1()
  
 if __name__ == "__main__":
