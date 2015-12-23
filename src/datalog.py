@@ -9,7 +9,7 @@ from multiprocessing import Pool
 
 class CompletenessSolver():
 
-  num_of_cores_to_use = 10
+  num_of_cores_to_use = 4
 
   def infer_rule(self,rule,grounding_set):
     head, body = rule.get_tuple()
@@ -19,6 +19,12 @@ class CompletenessSolver():
       return head
     else:
       return None
+
+  def check_query(self):
+    self.read_query(self.query_file)
+    inferred_available = self.infer_TCs(self.tcs_file)
+    q_a = self.infer_rule(self.q_a,inferred_available)
+    return q_a, inferred_available
     
   
   def infer(self, ground_rules):
@@ -30,8 +36,21 @@ class CompletenessSolver():
         inferred_facts.add(inferred_fact)
     return inferred_facts
 
+  def create_q_a(self,grounding_set):
+    p_q_a = Atom("q",["a"])
+    body = []
+    for atom in grounding_set:
+      p, args = atom.get_tuple()
+      available_atom = Atom(p+"_a",args) # bag semantics, everythings is already assumed to be grounded in the q_a
+      body.append(available_atom)
+    q_a = Rule(p_q_a,body)     
+    print(q_a)
+    return q_a
+
    
-  def __init__(self):
+  def __init__(self, query_file, tcs_file):
+    self.query_file = query_file
+    self.tcs_file = tcs_file
     self.parser = Parser()
 
   def read_query(self,filename):
@@ -39,6 +58,9 @@ class CompletenessSolver():
       query_str     = q_file.read().strip(" \n\r\t")
       grounding_set = self.parser.parse_atoms(query_str)
       self.grounder = Grounder(grounding_set)
+      self.q_a      = self.create_q_a(grounding_set)
+
+
 
   def process_rules(self,data):
     inferred = set()
@@ -62,7 +84,7 @@ class CompletenessSolver():
     return chunks
 
 
-  def read_ASP_TCs(self,filename):
+  def infer_TCs(self,filename):
     with open(filename, "r") as tc_file:
       data = tc_file.read().splitlines()
       k = self.num_of_cores_to_use
@@ -236,18 +258,20 @@ class Atom():
 
 def run_test1():
   t0 = time.time()
-  solver = CompletenessSolver()
   experiment_folder = "../experiments/test1/"
-  solver.read_query(experiment_folder+"query")
-  grounded_tcs = solver.read_ASP_TCs(experiment_folder+"tcs")
-  print(grounded_tcs)
+  query_file = experiment_folder+"query"
+  tcs_file   = experiment_folder+"tcs"
+  solver = CompletenessSolver(query_file, tcs_file)
+  q_a, inferred = solver.check_query()
   t1 = time.time()
   total_n = t1-t0
+  print(q_a)
+  print(inferred)
   print("Total seconds {}".format(str(total_n)))
 
 def main():
-  C=1000 
-  S=1000
+  C=100 
+  S=100
   print('generating C={C}, S={S}'.format(C=C,S=S))
   generate_test1(C,S)
   print('running')

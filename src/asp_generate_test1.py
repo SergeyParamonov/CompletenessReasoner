@@ -6,7 +6,8 @@ def main():
   generate_test1()
 
 def make_query(outputfile):
-  q_i = "pupil(n, c, s). class(c, s, 1, b). school(s, sc, t). schoolcluster(sc, d, pub)."
+# q_i = "pupil(n, c, s). class(c, s, 1, b). school(s, sc, t). schoolcluster(sc, d, pub)."
+  q_i = "pupil(n, c, s)." # test
   print(q_i, file=outputfile)
 
 def make_TCs(C,S,outputfile):
