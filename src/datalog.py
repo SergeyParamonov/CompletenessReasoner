@@ -1,4 +1,5 @@
 from collections import defaultdict
+from asp_generate_test1 import generate_test1
 import numpy as np
 import operator
 import sys
@@ -7,6 +8,26 @@ from multiprocessing import Pool
 
 
 class CompletenessSolver():
+
+  def infer_rule(self,rule,grounding_set):
+    head, body = rule.get_tuple()
+    body_set   = set(body)
+    facts      = set(grounding_set)
+    if body_set.issubset(facts):
+      return head
+    else:
+      return None
+    
+  
+  def infer(self, ground_rules):
+    grounding_set = self.grounder.grounding_set
+    inferred_facts = set()
+    for rule in ground_rules:
+      inferred_fact = self.infer_rule(rule,grounding_set)
+      if inferred_fact:
+        inferred_facts.add(inferred_fact)
+    return inferred_facts
+
    
   def __init__(self):
     self.parser = Parser()
@@ -18,11 +39,11 @@ class CompletenessSolver():
       self.grounder = Grounder(grounding_set)
 
   def process_rules(self,data):
-    inferred = 0
+    inferred = set()
     for indx, line in enumerate(data):
       rule = self.parser.parse_rule(line)
       grounded_rules = self.grounder.ground_rule(rule)
-      inferred += len(grounded_rules)
+      inferred = inferred.union(self.infer(grounded_rules))
     return inferred
 
   def split_tcs(self,data,k):
@@ -42,10 +63,13 @@ class CompletenessSolver():
   def read_ASP_TCs(self,filename):
     with open(filename, "r") as tc_file:
       data = tc_file.read().splitlines()
-      k = 8
+      k = 4
       pool = Pool(k)
       data_list = self.split_tcs(data,k)
-      inferred = pool.map(self.process_rules, data_list)
+      inferred_list = pool.map(self.process_rules, data_list)
+      inferred = set()
+      for fact_set in inferred_list:
+        inferred = inferred.union(fact_set)
       return inferred
 
 class Grounder():
@@ -135,15 +159,14 @@ class Grounder():
     grounded_clauses = self.apply_subs(rule, substitutions, variables)
     return grounded_clauses
 
-
-
-
 class Parser():
+
   def parse_atom(self,input_str):
     atom_str = input_str.strip()
     pred, rest = atom_str.split("(")
     rest = rest[:-1] # removed ')' at the end 
     args = rest.split(",")
+    args = [arg.strip() for arg in args]
     return Atom(pred,args)
 
   def parse_atoms(self,input_str):
@@ -166,9 +189,6 @@ class Parser():
       rest         = rest[atom_index+1:].strip(", ")
       body.append(current_atom)
     return Rule(head, body)
-
-
-      
 
 class Rule():
 
@@ -200,6 +220,12 @@ class Atom():
     self.args      = args[:]
     self.__out_str   = self.__precompute_repr(pred_name,args)
 
+  def __eq__(self, another_atom):
+    return self.__out_str == another_atom.__out_str
+  
+  def __hash__(self):
+    return hash(self.__out_str)
+
   def __repr__(self):
     return self.__out_str
 
@@ -218,6 +244,11 @@ def run_test1():
   print("Total seconds {}".format(str(total_n)))
 
 def main():
+  C=1000 
+  S=10000
+  print('generating C={C}, S={S}'.format(C=C,S=S))
+  generate_test1(C,S)
+  print('running')
   run_test1()
  
 if __name__ == "__main__":
