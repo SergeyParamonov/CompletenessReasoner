@@ -1,17 +1,19 @@
 from collections import defaultdict
 from asp_generate_test1 import generate_test1
-import numpy as np
 import operator
 import sys
 import time
 from multiprocessing import Pool
+from itertools import product
+import math
 
 
 class CompletenessSolver():
 
   num_of_cores_to_use = 4
-
-  def infer_rule(self,rule,grounding_set):
+  
+  @staticmethod
+  def infer_rule(rule,grounding_set):
     head, body = rule.get_tuple()
     body_set   = set(body)
     facts      = set(grounding_set)
@@ -20,9 +22,31 @@ class CompletenessSolver():
     else:
       return None
 
+  def update_grounding_set(self, fks_i):
+    inferred = set()
+    grounding_set = self.grounder.grounding_set[:]
+    for rule in fks_i:
+#     print(rule)
+      grounded_rules = self.grounder.ground_rule(rule)
+      inferred = inferred.union(self.infer(grounded_rules))
+#   print(inferred)
+    grounding_set = list(inferred.union(set(grounding_set)))
+#   print(grounding_set)
+    self.Grounder = Grounder(grounding_set)
+
+
+
+
   def check_query(self):
     self.read_query(self.query_file)
-    inferred_available = self.infer_TCs(self.tcs_file)
+    fks_a = [] # default empty rules for fk_a
+    if self.fk_file and self.fk_semantics:
+      fks_i, fks_a = self.read_FKs()
+    # print("PARSED FKS")
+    # print(fks_i)
+    # print(fks_a)
+      self.update_grounding_set(fks_i)
+    inferred_available = self.infer_TCs(self.tcs_file,FK_rules=fks_a)
     q_a = self.infer_rule(self.q_a,inferred_available)
     return q_a, inferred_available
     
@@ -48,9 +72,11 @@ class CompletenessSolver():
     return q_a
 
    
-  def __init__(self, query_file, tcs_file):
+  def __init__(self, query_file, tcs_file, fk_file=None, fk_semantics=None):
     self.query_file = query_file
     self.tcs_file = tcs_file
+    self.fk_file  = fk_file
+    self.fk_semantics = fk_semantics
     self.parser = Parser()
 
   def read_query(self,filename):
@@ -59,7 +85,18 @@ class CompletenessSolver():
       grounding_set = self.parser.parse_atoms(query_str)
       self.grounder = Grounder(grounding_set)
       self.q_a      = self.create_q_a(grounding_set)
-
+   
+  def read_FKs(self):
+    fks_i = []
+    fks_a = []
+    with open(self.fk_file,"r") as fk_file:
+      fks_str = fk_file.read().splitlines()
+      for fk_str in fks_str:
+        fk_i,fk_a = self.parser.parse_FK(fk_str, self.fk_semantics)
+        if fk_a:
+          fks_a.append(fk_a)
+        fks_i.append(fk_i)
+    return fks_i, fks_a
 
 
   def process_rules(self,data):
@@ -72,7 +109,7 @@ class CompletenessSolver():
 
   def split_tcs(self,data,k):
     size = len(data)   
-    chunk_size = int(np.ceil(size/float(k)))
+    chunk_size = int(math.ceil(size/float(k)))
     chunks = []
     for i in range(k):
       left_bound = i*chunk_size
@@ -84,9 +121,9 @@ class CompletenessSolver():
     return chunks
 
 
-  def infer_TCs(self,filename):
+  def infer_TCs(self,filename,FK_rules = []):
     with open(filename, "r") as tc_file:
-      data = tc_file.read().splitlines()
+      data = tc_file.read().splitlines() + list(map(lambda x: str(x),FK_rules))
       k = self.num_of_cores_to_use
       pool = Pool(k)
       data_list = self.split_tcs(data,k)
@@ -97,13 +134,21 @@ class CompletenessSolver():
       return inferred
 
 class Grounder():
+  
+  @staticmethod
+  def is_functional_term(term):
+    if "[" in term:
+      return True
+    else:
+      return False
 
   def __get_typing(self, grounding_set):
     typing = defaultdict(set)
     for atom in grounding_set:
       p, args = atom.get_tuple()
       for indx, arg in enumerate(args):
-        typing[(p,indx)].add(arg)
+        if not Grounder.is_functional_term(arg):
+          typing[(p,indx)].add(arg)
     return typing
 
 
@@ -132,18 +177,7 @@ class Grounder():
 
   def translate_possible_values_into_substitutions(self,possible_values):
     variables = list(possible_values.keys())
-    sub_num   = 1
-    lens      = map(len,list(possible_values.values()))
-    for sub_len in lens:
-      sub_num *= sub_len
-    subs = np.ndarray(shape=(sub_num,len(variables)), dtype='|S6')
-    for var_index,var in enumerate(variables):
-      vals = possible_values[var]
-      num_of_vals = len(vals)
-      for index, val in enumerate(vals):
-        from_indx = index*sub_num/num_of_vals
-        to_indx   = (index+1)*sub_num/num_of_vals
-        subs[from_indx:to_indx,var_index] = val
+    subs = product(*[possible_values[var] for var in variables])
     return subs, variables
 
   def apply_subs(self, rule, substitutions, variables):
@@ -166,12 +200,32 @@ class Grounder():
     p, args = atom.get_tuple()
     new_args = args[:]
     for pos,arg in enumerate(args):
-      try:
-        index = variables.index(arg)
-        new_args[pos] = sub[index].decode('UTF-8')
-      except:
-        continue
+      if not Grounder.is_functional_term(arg):
+        try:
+          index = variables.index(arg)
+          new_args[pos] = sub[index]
+        except:
+          continue
+      else:
+        new_args[pos] = self.apply_functional_substitution(arg, sub, variables)
     return Atom(p,new_args)
+
+  @staticmethod
+  def apply_functional_substitution(term, sub, variables):
+    # cut the fun name
+    f_name_indx = term.index("[")
+    f_name = term[:f_name_indx]
+    f_vars = term[f_name_indx+1:-1].split(";") 
+    f_vars = [var.strip() for var in f_vars]
+    
+    new_f_vars = []
+    for var in f_vars:
+     index = variables.index(var)
+     new_f_vars.append(sub[index])
+
+    
+    ground_f_atom = f_name + "[" + ';'.join(new_f_vars) + "]"
+    return ground_f_atom
 
 
   def ground_rule(self, rule):
@@ -184,6 +238,62 @@ class Grounder():
     return grounded_clauses
 
 class Parser():
+
+  def parse_FK(self, input_str, enforced_semantics = False):
+    from_atom, to_atom, from_indeces, to_indeces = map(lambda x: x.strip(),input_str.split(";"))
+    from_indeces = eval(from_indeces)
+    to_indeces   = eval(to_indeces)
+    from_atom = self.parse_atom(from_atom)
+    to_atom   = self.parse_atom(to_atom)
+    from_p,from_args = from_atom.get_tuple()
+    to_p,  to_args   = to_atom.get_tuple()
+    var_name         = "X_"
+    new_from_args = from_args[:]
+    new_to_args   = to_args[:]
+    FK_key_args   = []
+    for Indx,(I1,I2) in enumerate(zip(from_indeces,to_indeces),start=1):
+      fresh_var = var_name + str(Indx)
+      new_from_args[I1-1] = fresh_var
+      new_to_args[I2-1]   = fresh_var
+      FK_key_args.append(fresh_var)
+   
+    fun_name = "f_"
+    for I,_ in enumerate(to_args,start=1):
+      if I not in to_indeces:
+        new_to_args[I-1] = fun_name + str(I) + "["+ ";".join(FK_key_args) + "]"
+
+
+    fresh_name = "YYY_"
+    for I,_ in enumerate(from_args,start=1):
+      if I not in from_indeces:
+        new_from_args[I-1] = fresh_name + str(I)
+      
+    new_to_atom = Atom(to_p, new_to_args)
+    new_from_atom = Atom(from_p, new_from_args)
+
+    i_rule = Rule(new_to_atom, [new_from_atom]) 
+
+    if enforced_semantics:
+      enforced_rule = self.create_enforced_rule(new_from_atom,new_to_atom)
+      return i_rule, enforced_rule
+    else:
+      return i_rule, None
+
+  def create_enforced_rule(self, new_from_atom, new_to_atom):
+    p, args = new_to_atom.get_tuple()
+    fresh_var = "ZZZ_"
+    non_functional_args = args[:]
+    for indx, arg in enumerate(args):
+      if Grounder.is_functional_term(arg):
+        non_functional_args[indx] = fresh_var + str(indx)
+    head = Atom(p +"_a", non_functional_args)
+    body_to = Atom(p, non_functional_args)
+    return Rule(head,[new_from_atom,body_to])
+
+
+    
+
+      
 
   def parse_atom(self,input_str):
     atom_str = input_str.strip()
@@ -261,21 +371,35 @@ def run_test1():
   experiment_folder = "../experiments/test1/"
   query_file = experiment_folder+"query"
   tcs_file   = experiment_folder+"tcs"
-  solver = CompletenessSolver(query_file, tcs_file)
+  fk_file    = experiment_folder+"fks"
+  solver = CompletenessSolver(query_file, tcs_file, fk_file, fk_semantics=True)
   q_a, inferred = solver.check_query()
   t1 = time.time()
   total_n = t1-t0
   print(q_a)
   print(inferred)
   print("Total seconds {}".format(str(total_n)))
+  print("Grounding set")
+  print(solver.grounder.grounding_set)
 
 def main():
-  C=100 
+  C=100
   S=100
   print('generating C={C}, S={S}'.format(C=C,S=S))
   generate_test1(C,S)
   print('running')
   run_test1()
- 
+# p = Parser()
+# r_i,r_a = p.parse_FK("pupil(N,C,S); class(C,S,X1,X2);   [ 2 ,  3]; [   1  ,2]",enforced_semantics=True)
+# r = p.parse_rule("class(C,S,f_1[C;S],f_2[C;S]) :- pupil(N,C,S).")
+# gs = p.parse_atoms("pupil(n1,c1,s1). pupil(n2,c2,s2). class(c1,s1,cnst1,const2).")
+# g = Grounder(gs)
+# ground_rules = g.ground_rule(r)
+# 
+# for rule in ground_rules:
+#   print(rule)
+#   answer = CompletenessSolver.infer_rule(rule,gs)
+#   print(answer)
+
 if __name__ == "__main__":
   main()
