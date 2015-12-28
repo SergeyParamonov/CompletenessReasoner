@@ -26,33 +26,27 @@ class CompletenessSolver():
     inferred = set()
     grounding_set = self.grounder.grounding_set[:]
     for rule in fks_i:
-#     print(rule)
       grounded_rules = self.grounder.ground_rule(rule)
       inferred = inferred.union(self.infer(grounded_rules))
-#   print(inferred)
     grounding_set = list(inferred.union(set(grounding_set)))
-#   print(grounding_set)
     self.Grounder = Grounder(grounding_set)
-
-
-
 
   def check_query(self):
     self.read_query(self.query_file)
     fks_a = [] # default empty rules for fk_a
     if self.fk_file and self.fk_semantics:
       fks_i, fks_a = self.read_FKs()
-    # print("PARSED FKS")
-    # print(fks_i)
-    # print(fks_a)
       self.update_grounding_set(fks_i)
     inferred_available = self.infer_TCs(self.tcs_file,FK_rules=fks_a)
-    q_a = self.infer_rule(self.q_a,inferred_available)
+    q_a_grounder   = Grounder(inferred_available)
+    grounded_rules = q_a_grounder.ground_rule(self.q_a)
+    q_a            = self.infer(grounded_rules,grounding_set=inferred_available)
     return q_a, inferred_available
     
   
-  def infer(self, ground_rules):
-    grounding_set = self.grounder.grounding_set
+  def infer(self, ground_rules,grounding_set=None):
+    if grounding_set is None:
+      grounding_set = self.grounder.grounding_set
     inferred_facts = set()
     for rule in ground_rules:
       inferred_fact = self.infer_rule(rule,grounding_set)
@@ -60,32 +54,39 @@ class CompletenessSolver():
         inferred_facts.add(inferred_fact)
     return inferred_facts
 
-  def create_q_a(self,grounding_set):
-    p_q_a = Atom("q",["a"])
-    body = []
-    for atom in grounding_set:
+  def create_q_a(self,head,body):
+    q_a_body = []
+    head_a = self.parser.parse_atom(head)
+    p, args = head_a.get_tuple()
+    q_a_head = Atom(p+"_a",args)
+    body = body.strip(" .")
+    body_atoms = body.split(";")
+    for atom_str in body_atoms:
+      atom = self.parser.parse_atom(atom_str)
       p, args = atom.get_tuple()
       available_atom = Atom(p+"_a",args) # bag semantics, everythings is already assumed to be grounded in the q_a
-      body.append(available_atom)
-    q_a = Rule(p_q_a,body)     
-    print(q_a)
+      q_a_body.append(available_atom)
+    q_a = Rule(q_a_head,q_a_body)     
     return q_a
-
-   
-  def __init__(self, query_file, tcs_file, fk_file=None, fk_semantics=None):
-    self.query_file = query_file
-    self.tcs_file = tcs_file
-    self.fk_file  = fk_file
-    self.fk_semantics = fk_semantics
-    self.parser = Parser()
 
   def read_query(self,filename):
     with open(filename, "r") as q_file:
       query_str     = q_file.read().strip(" \n\r\t")
-      grounding_set = self.parser.parse_atoms(query_str)
+      head, body    = query_str.split(":-")
+      grounding_set = self.parser.parse_atoms(body)
       self.grounder = Grounder(grounding_set)
-      self.q_a      = self.create_q_a(grounding_set)
+      self.q_a      = self.create_q_a(head.strip(),body)
    
+   
+  def __init__(self, query_file, tcs_file, fk_file=None, fk_semantics=None, query_semantics="bag"):
+    self.query_file = query_file
+    self.tcs_file = tcs_file
+    self.fk_file  = fk_file
+    self.fk_semantics = fk_semantics
+    self.query_semantics = query_semantics
+    self.parser = Parser()
+
+  
   def read_FKs(self):
     fks_i = []
     fks_a = []
@@ -108,7 +109,7 @@ class CompletenessSolver():
     return inferred
 
   def split_tcs(self,data,k):
-    size = len(data)   
+    size = len(data) 
     chunk_size = int(math.ceil(size/float(k)))
     chunks = []
     for i in range(k):
@@ -160,7 +161,7 @@ class Grounder():
   def update_inverse(self,inverse,atom):
     p, args = atom.get_tuple()
     for index, arg in enumerate(args):
-      if arg.isupper():
+      if arg[0].isupper():
         inverse[arg].add((p,index))
 
   def create_rule_grounding_substitutions(self, inverse):
@@ -305,10 +306,10 @@ class Parser():
 
   def parse_atoms(self,input_str):
     atoms_str = input_str.strip(". ")
-    atoms_raw = atoms_str.split(".")
+    atoms_raw = atoms_str.split(";")
     atoms = []
     for atom in atoms_raw:
-      atoms.append(self.parse_atom(atom))
+      atoms.append(self.parse_atom(atom.lower()))
     return atoms
   
 
@@ -372,12 +373,13 @@ def run_test1():
   query_file = experiment_folder+"query"
   tcs_file   = experiment_folder+"tcs"
   fk_file    = experiment_folder+"fks"
-  solver = CompletenessSolver(query_file, tcs_file, fk_file, fk_semantics=True)
+  solver = CompletenessSolver(query_file, tcs_file, fk_file, fk_semantics=True, query_semantics="bag")
   q_a, inferred = solver.check_query()
   t1 = time.time()
   total_n = t1-t0
-  print(q_a)
-  print(inferred)
+  print(solver.q_a)
+  print('query results ',q_a)
+  print("inferred:",inferred)
   print("Total seconds {}".format(str(total_n)))
   print("Grounding set")
   print(solver.grounder.grounding_set)

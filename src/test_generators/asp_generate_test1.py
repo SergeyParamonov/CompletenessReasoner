@@ -6,7 +6,7 @@ def main():
   generate_test1()
 
 def make_query(outputfile):
-  q_i = "pupil(n, c, s). class(c, s, 1, b). school(s, sc, t). schoolcluster(sc, d, pub)."
+  q_i = "q(N) :- pupil(N, C, S); class(C, S, 1, B); school(S, SC, T); schoolcluster(SC, D, pub)."
 # q_i = "pupil(n, c, s)." # test
   print(q_i, file=outputfile)
 
