@@ -1,5 +1,5 @@
 from collections import defaultdict
-from asp_generate_test1 import generate_test1
+from test_generators.test1 import generate_test1
 import operator
 import sys
 import time
@@ -29,7 +29,7 @@ class CompletenessSolver():
       grounded_rules = self.grounder.ground_rule(rule)
       inferred = inferred.union(self.infer(grounded_rules))
     grounding_set = list(inferred.union(set(grounding_set)))
-    self.Grounder = Grounder(grounding_set)
+    self.grounder = Grounder(grounding_set)
 
   def check_query(self):
     self.read_query(self.query_file)
@@ -38,6 +38,7 @@ class CompletenessSolver():
       fks_i, fks_a = self.read_FKs()
       self.update_grounding_set(fks_i)
     inferred_available = self.infer_TCs(self.tcs_file,FK_rules=fks_a)
+    print(self.grounder.typing)
     q_a_grounder   = Grounder(inferred_available)
     grounded_rules = q_a_grounder.ground_rule(self.q_a)
     q_a            = self.infer(grounded_rules,grounding_set=inferred_available)
@@ -148,8 +149,8 @@ class Grounder():
     for atom in grounding_set:
       p, args = atom.get_tuple()
       for indx, arg in enumerate(args):
-        if not Grounder.is_functional_term(arg):
-          typing[(p,indx)].add(arg)
+      # if not Grounder.is_functional_term(arg):
+        typing[(p,indx)].add(arg)
     return typing
 
 
@@ -265,6 +266,7 @@ class Parser():
 
 
     fresh_name = "YYY_"
+
     for I,_ in enumerate(from_args,start=1):
       if I not in from_indeces:
         new_from_args[I-1] = fresh_name + str(I)
@@ -290,11 +292,6 @@ class Parser():
     head = Atom(p +"_a", non_functional_args)
     body_to = Atom(p, non_functional_args)
     return Rule(head,[new_from_atom,body_to])
-
-
-    
-
-      
 
   def parse_atom(self,input_str):
     atom_str = input_str.strip()
