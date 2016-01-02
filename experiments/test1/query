@@ -1,1 +1,1 @@
-pupil(n, c, s). class(c, s, 1, b). school(s, sc, t). schoolcluster(sc, d, pub).
+q(N) :- pupil(N, C, S); class(C, S, 1, B); school(S, SC, T); schoolcluster(SC, D, pub).

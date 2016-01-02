@@ -29,6 +29,7 @@ class CompletenessSolver():
       grounded_rules = self.grounder.ground_rule(rule)
       inferred = inferred.union(self.infer(grounded_rules))
     grounding_set = list(inferred.union(set(grounding_set)))
+    grounding_set = self.clean_after_FK(grounding_set)
     self.grounder = Grounder(grounding_set)
 
   def check_query(self):
@@ -38,7 +39,6 @@ class CompletenessSolver():
       fks_i, fks_a = self.read_FKs()
       self.update_grounding_set(fks_i)
     inferred_available = self.infer_TCs(self.tcs_file,FK_rules=fks_a)
-    print(self.grounder.typing)
     q_a_grounder   = Grounder(inferred_available)
     grounded_rules = q_a_grounder.ground_rule(self.q_a)
     q_a            = self.infer(grounded_rules,grounding_set=inferred_available)
@@ -135,39 +135,73 @@ class CompletenessSolver():
         inferred = inferred.union(fact_set)
       return inferred
 
-class Grounder():
+  @staticmethod
+  def equal_upto_functional_terms(atom1, atom2):
+    p1, args1 = atom1.get_tuple()
+    p2, args2 = atom2.get_tuple()
+    if p1 != p2:
+      return False
+    for term1, term2 in zip(args1,args2):  
+      if (term1 != term2) and not (Grounder.is_functional_term(term1) or Grounder.is_functional_term(term2)):
+        return False
+    return True
   
   @staticmethod
-  def is_functional_term(term):
-    if "[" in term:
-      return True
-    else:
-      return False
-
-  def __get_typing(self, grounding_set):
-    typing = defaultdict(set)
-    for atom in grounding_set:
-      p, args = atom.get_tuple()
-      for indx, arg in enumerate(args):
-      # if not Grounder.is_functional_term(arg):
-        typing[(p,indx)].add(arg)
-    return typing
-
-
-  def __init__(self, grounding_set):
-    self.grounding_set = grounding_set
-    self.typing        = self.__get_typing(grounding_set)
-    #TODO introduce grounding types ... 
-
-  def update_inverse(self,inverse,atom):
+  def is_functional_atom(atom):
     p, args = atom.get_tuple()
-    for index, arg in enumerate(args):
-      if arg[0].isupper():
-        inverse[arg].add((p,index))
-
-  def create_rule_grounding_substitutions(self, inverse):
-    typing = self.typing
-    possible_values = defaultdict(set)
+    for term in args:
+      if Grounder.is_functional_term(term):
+        return True
+    return False
+                                           
+  def clean_after_FK(self,grounding_set):                
+    grounding_set     = grounding_set[:]
+    new_grounding_set = grounding_set[:]
+    for atom1, atom2 in product(grounding_set, grounding_set):
+      print(atom1,atom2)
+      if atom1 > atom2 and self.equal_upto_functional_terms(atom1,atom2):
+        if self.is_functional_atom(atom1):
+          print("REMOVED", atom1)
+          new_grounding_set.remove(atom1)
+        else:
+          print("REMOVED", atom2)
+          new_grounding_set.remove(atom2)
+    return new_grounding_set
+                                           
+                                           
+class Grounder():                          
+                                           
+  @staticmethod                            
+  def is_functional_term(term):            
+    if "[" in term:                        
+      return True                          
+    else:                                  
+      return False                         
+                                           
+  def __get_typing(self, grounding_set):   
+    typing = defaultdict(set)              
+    for atom in grounding_set:             
+      p, args = atom.get_tuple()           
+      for indx, arg in enumerate(args):    
+      # if not Grounder.is_functional_term(arg):
+        typing[(p,indx)].add(arg)          
+    return typing                          
+                                           
+                                           
+  def __init__(self, grounding_set):       
+    self.grounding_set = grounding_set     
+    self.typing        = self.__get_typing(grounding_set)
+    #TODO introduce grounding types ...    
+                                           
+  def update_inverse(self,inverse,atom):   
+    p, args = atom.get_tuple()             
+    for index, arg in enumerate(args):     
+      if arg[0].isupper():                 
+        inverse[arg].add((p,index))        
+                                           
+  def create_rule_grounding_substitutions  (self, inverse):
+    typing = self.typing                   
+    possible_values = defaultdict(set)     
     for var,vartypes in inverse.items():
       for vartype in vartypes:
         if not possible_values[var]:
@@ -352,6 +386,9 @@ class Atom():
     self.args      = args[:]
     self.__out_str   = self.__precompute_repr(pred_name,args)
 
+  def __gt__(self, another_atom):
+    return self.__out_str > another_atom.__out_str
+
   def __eq__(self, another_atom):
     return self.__out_str == another_atom.__out_str
   
@@ -381,6 +418,7 @@ def run_test1():
   print("Grounding set")
   print(solver.grounder.grounding_set)
 
+
 def main():
   C=100
   S=100
@@ -388,6 +426,12 @@ def main():
   generate_test1(C,S)
   print('running')
   run_test1()
+# p = Parser()
+# atom1 = p.parse_atom("class(c,s,f_3[c;s],f_4[c;s])")
+# atom2 = p.parse_atom(" class(c,s,1,b)")
+# print(atom1)
+# print(atom2)
+# print(CompletenessSolver.equal_upto_functional_terms(atom1,atom2))
 # p = Parser()
 # r_i,r_a = p.parse_FK("pupil(N,C,S); class(C,S,X1,X2);   [ 2 ,  3]; [   1  ,2]",enforced_semantics=True)
 # r = p.parse_rule("class(C,S,f_1[C;S],f_2[C;S]) :- pupil(N,C,S).")
