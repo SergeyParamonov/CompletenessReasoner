@@ -19,6 +19,7 @@ def make_FK(outputfile):
   print("pupil(N,C,S);class(C,S,Y,B);[2,3];[1,2]",file=outputfile)
   print("class(C,S,Y,B);school(S,SC,T);[2];[1]",file=outputfile)
   print("school(S,SC,T);schoolcluster(SC,D,P);[2];[1]",file=outputfile)
+# print("school(S,SC,T);test(S,X);[1];[1]",file=outputfile) testing clean_after_FK
 
   
 
