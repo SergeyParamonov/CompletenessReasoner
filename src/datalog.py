@@ -5,6 +5,7 @@ from parser import Parser
 from grounder import Grounder
 # test generator
 from test_generators.test1 import generate_test1
+from test_generators.test2 import generate_test2
 
 from collections import defaultdict
 import operator
@@ -66,12 +67,26 @@ class CompletenessSolver():
       else:
         old_inferred = inferred.copy()
 
+  def create_cases(self):
+    query_set = self.grounder.grounding_set
+    fdcs      = self.cfdcs
+    #TODO -- make a connection
+
   def check_query(self):
     self.read_query(self.query_file)
+    if self.cfdc_file is not None:
+      self.cfdcs = p.parse_CFDCs(self.fdc_file)
+    else:
+      self.cfdcs = None
+
     fks_a = [] # default empty rules for fk_a
     if self.fk_file and self.fk_semantics:
       fks_i, fks_a = self.read_FKs()
       self.update_grounding_set(fks_i)
+
+    if self.cfdcs:
+      self.create_cases()
+
     inferred_available = self.infer_TCs(self.tcs_file)
     inferred_available = self.apply_fks_a(fks_a, inferred_available)
     q_a_grounder   = Grounder(inferred_available)
@@ -114,12 +129,13 @@ class CompletenessSolver():
       self.q_a      = self.create_q_a(head.strip(),body)
    
    
-  def __init__(self, query_file, tcs_file, fk_file=None, fk_semantics=None, query_semantics="bag"):
+  def __init__(self, query_file, tcs_file, cfdc_file=None, fk_file=None, fk_semantics=None, query_semantics="bag"):
     self.query_file = query_file
     self.tcs_file = tcs_file
     self.fk_file  = fk_file
     self.fk_semantics = fk_semantics
     self.query_semantics = query_semantics
+    self.cfdc_file = cfdc_file
     self.parser = Parser()
 
   
@@ -193,49 +209,4 @@ class CompletenessSolver():
           new_grounding_set.remove(atom2)
     return new_grounding_set
                                            
-                                           
-def run_test1():
-  t0 = time.time()
-  experiment_folder = "../experiments/test1/"
-  query_file = experiment_folder+"query"
-  tcs_file   = experiment_folder+"tcs"
-  fk_file    = experiment_folder+"fks"
-  solver = CompletenessSolver(query_file, tcs_file, fk_file, fk_semantics=True, query_semantics="bag")
-  q_a, inferred = solver.check_query()
-  t1 = time.time()
-  total_n = t1-t0
-  print(solver.q_a)
-  print('query results ',q_a)
-  print("inferred:",inferred)
-  print("Total seconds {}".format(str(total_n)))
-  print("Grounding set")
-  print(solver.grounder.grounding_set)
 
-
-def main():
-  C=1000
-  S=1000
-  print('generating C={C}, S={S}'.format(C=C,S=S))
-  generate_test1(C,S)
-  print('running')
-  run_test1()
-# p = Parser()
-# atom1 = p.parse_atom("class(c,s,f_3[c;s],f_4[c;s])")
-# atom2 = p.parse_atom(" class(c,s,1,b)")
-# print(atom1)
-# print(atom2)
-# print(CompletenessSolver.equal_upto_functional_terms(atom1,atom2))
-# p = Parser()
-# r_i,r_a = p.parse_FK("pupil(N,C,S); class(C,S,X1,X2);   [ 2 ,  3]; [   1  ,2]",enforced_semantics=True)
-# r = p.parse_rule("class(C,S,f_1[C;S],f_2[C;S]) :- pupil(N,C,S).")
-# gs = p.parse_atoms("pupil(n1,c1,s1). pupil(n2,c2,s2). class(c1,s1,cnst1,const2).")
-# g = Grounder(gs)
-# ground_rules = g.ground_rule(r)
-# 
-# for rule in ground_rules:
-#   print(rule)
-#   answer = CompletenessSolver.infer_rule(rule,gs)
-#   print(answer)
-
-if __name__ == "__main__":
-  main()

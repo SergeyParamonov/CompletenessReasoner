@@ -1,6 +1,7 @@
 #datalog classes
 from atom import Atom
 from rule import Rule
+from CFDC import CFDC
 
 class Parser():
 
@@ -102,4 +103,28 @@ class Parser():
       if Parser.is_functional_term(term):
         return True
     return False
+
+  
+  def parse_CFDC(self,input_str): 
+    escaped_str = input_str.replace(" ","")
+    R, i1, v1, i2, v2 = escaped_str.split(";")
+    i1 = int(i1)
+    if i2 != "-" and v2 != "-":
+      i2 = int(i2)
+    else:
+      i2 = None
+      v2 = None
+    v1 = v1.replace("{","")
+    v1 = v1.replace("}","")
+    v1 = set(v1.split(","))
+    return CFDC(R,i1,v1,i2,v2)
+
+  def parse_CFDCs(sefl,filename):
+    with open(filename,"r") as cfdc_file:
+      cfdcs = []
+      lines = cfdc_file.read().splitlines()
+      for line in lines:
+        cfdc = sefl.parse_CFDC(line)
+        cfdcs.append(cfdc)
+      return cfdcs
 
