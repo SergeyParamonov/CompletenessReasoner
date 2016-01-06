@@ -54,7 +54,7 @@ class CompletenessSolver():
     grouding_ideal_2_avail_atoms = set(self.clone_ideal_to_available_for_grounding(self.grounder.grounding_set)) # we need to ground available atoms in FK_a using constants from ideal atoms too
     grounder          = Grounder(new_grounding_set | grouding_ideal_2_avail_atoms) 
     grounded_rules    = grounder.ground_rules(fks_a)
-    print("NEW GROUNDIN SET", new_grounding_set)
+    print("NEW GROUNDING SET", new_grounding_set)
     print("FKS_GROUNDED",grounded_rules)
     old_inferred = new_grounding_set.copy()
     while True:
@@ -70,12 +70,42 @@ class CompletenessSolver():
   def create_cases(self):
     query_set = self.grounder.grounding_set
     fdcs      = self.cfdcs
-    #TODO -- make a connection
+    var2fdc   = defaultdict(list)
+    print("affected vars")
+    for fdc in fdcs:
+      affected_vars = self.get_affected_vars(fdc, query_set)
+      for var in affected_vars: 
+        var2fdc[var].append(fdc)
+    cases = defaultdict(set)
+    for key, fdcs in var2fdc.items():
+      values = None
+      for fdc in fdcs:
+        R, i, vals = fdc.get_fdc_tuple()
+        if values is None:
+          values = set(vals)
+        else:
+          values &= set(vals)
+      cases[key] = values
+    return cases
+        
+      
+
+
+  @staticmethod
+  def get_affected_vars(fdc, query_set):
+    affected = set()
+    R, i, vasl = fdc.get_fdc_tuple()
+    for atom in query_set:
+      p, args = atom.get_tuple()
+      if R == p:
+        affected.add(args[i-1])
+    return affected
+          
 
   def check_query(self):
     self.read_query(self.query_file)
     if self.cfdc_file is not None:
-      self.cfdcs = p.parse_CFDCs(self.fdc_file)
+      self.cfdcs = self.parser.parse_CFDCs(self.cfdc_file)
     else:
       self.cfdcs = None
 
@@ -85,13 +115,15 @@ class CompletenessSolver():
       self.update_grounding_set(fks_i)
 
     if self.cfdcs:
-      self.create_cases()
+      self.cases = self.create_cases()
+     
+    
 
     inferred_available = self.infer_TCs(self.tcs_file)
     inferred_available = self.apply_fks_a(fks_a, inferred_available)
-    q_a_grounder   = Grounder(inferred_available)
-    grounded_rules = q_a_grounder.ground_rule(self.q_a)
-    q_a            = self.infer(grounded_rules,grounding_set=inferred_available)
+    q_a_grounder       = Grounder(inferred_available)
+    grounded_rules     = q_a_grounder.ground_rule(self.q_a)
+    q_a                = self.infer(grounded_rules,grounding_set=inferred_available)
     return q_a, inferred_available
     
   

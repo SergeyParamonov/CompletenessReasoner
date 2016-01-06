@@ -43,7 +43,7 @@ def run_test2():
   tcs_file   = experiment_folder+"tcs"
 
   t0 = time.time()
-  solver = CompletenessSolver(query_file, tcs_file, [], fk_semantics=False, cfdc_file=cfdc_file, query_semantics="bag")
+  solver = CompletenessSolver(query_file, tcs_file, fk_file=None, fk_semantics=None, cfdc_file=fdc_file, query_semantics="bag")
   q_a, inferred = solver.check_query()
   t1 = time.time()
   total_n = t1-t0

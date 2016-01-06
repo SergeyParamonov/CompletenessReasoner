@@ -15,3 +15,6 @@ class CFDC():
 
   def __str__(self):
     return self.__repr__()
+
+  def get_fdc_tuple(self):
+    return self.pred_name, self.indx1, self.vals1
