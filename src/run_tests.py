@@ -3,7 +3,7 @@ from atom import Atom
 from rule import Rule
 from parser import Parser
 from grounder import Grounder
-from datalog import CompletenessSolver
+from solver import CompletenessSolver
 # test generator
 from test_generators.test1 import generate_test1
 from test_generators.test2 import generate_test2
@@ -54,6 +54,8 @@ def run_test2():
   print("Total seconds {}".format(str(total_n)))
   print("Grounding set")
   print(solver.grounder.grounding_set)
+  print(solver.number_of_cases)
+  print(solver.cases_vars)
 
 
 def main():

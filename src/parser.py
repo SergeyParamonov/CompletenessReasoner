@@ -5,12 +5,13 @@ from CFDC import CFDC
 
 class Parser():
 
-  def parse_FK(self, input_str, enforced_semantics = False):
+  @staticmethod
+  def parse_FK(input_str, enforced_semantics = False):
     from_atom, to_atom, from_indeces, to_indeces = map(lambda x: x.strip(),input_str.split(";"))
     from_indeces = eval(from_indeces)
     to_indeces   = eval(to_indeces)
-    from_atom = self.parse_atom(from_atom)
-    to_atom   = self.parse_atom(to_atom)
+    from_atom = Parser.parse_atom(from_atom)
+    to_atom   = Parser.parse_atom(to_atom)
     from_p,from_args = from_atom.get_tuple()
     to_p,  to_args   = to_atom.get_tuple()
     var_name         = "X_"
@@ -41,12 +42,13 @@ class Parser():
     i_rule = Rule(new_to_atom, [new_from_atom]) 
 
     if enforced_semantics:
-      enforced_rule = self.create_enforced_rule(new_from_atom,new_to_atom)
+      enforced_rule = Parser.create_enforced_rule(new_from_atom,new_to_atom)
       return i_rule, enforced_rule
     else:
       return i_rule, None
 
-  def create_enforced_rule(self, new_from_atom, new_to_atom):
+  @staticmethod
+  def create_enforced_rule(new_from_atom, new_to_atom):
     p, args = new_to_atom.get_tuple()
     p_from, args_from = new_from_atom.get_tuple()
     p_from_a = p_from + "_a"
@@ -54,13 +56,14 @@ class Parser():
     fresh_var = "ZZZ_"
     non_functional_args = args[:]
     for indx, arg in enumerate(args):
-      if self.is_functional_term(arg):
+      if Parser.is_functional_term(arg):
         non_functional_args[indx] = fresh_var + str(indx)
     head = Atom(p +"_a", non_functional_args)
     body_to = Atom(p, non_functional_args)
     return Rule(head,[from_atom_available,body_to])
 
-  def parse_atom(self,input_str):
+  @staticmethod
+  def parse_atom(input_str):
     atom_str = input_str.strip()
     pred, rest = atom_str.split("(")
     rest = rest[:-1] # removed ')' at the end 
@@ -68,23 +71,25 @@ class Parser():
     args = [arg.strip() for arg in args]
     return Atom(pred,args)
 
-  def parse_atoms(self,input_str):
+  @staticmethod
+  def parse_atoms(input_str):
     atoms_str = input_str.strip(". ")
     atoms_raw = atoms_str.split(";")
     atoms = []
     for atom in atoms_raw:
-      atoms.append(self.parse_atom(atom.lower()))
+      atoms.append(Parser.parse_atom(atom.lower()))
     return atoms
   
 
-  def parse_rule(self,input_str):
+  @staticmethod
+  def parse_rule(input_str):
     rule_str = input_str.strip(" .")
     head, rest = rule_str.split(":-")
-    head = self.parse_atom(head.strip())
+    head = Parser.parse_atom(head.strip())
     body = []
     while rest:
       atom_index   = rest.index(")")
-      current_atom = self.parse_atom(rest[:atom_index+1].strip())
+      current_atom = Parser.parse_atom(rest[:atom_index+1].strip())
       rest         = rest[atom_index+1:].strip(", ")
       body.append(current_atom)
     return Rule(head, body)
@@ -104,8 +109,8 @@ class Parser():
         return True
     return False
 
-  
-  def parse_CFDC(self,input_str): 
+  @staticmethod
+  def parse_CFDC(input_str): 
     escaped_str = input_str.replace(" ","")
     R, i1, v1, i2, v2 = escaped_str.split(";")
     i1 = int(i1)
@@ -119,12 +124,20 @@ class Parser():
     v1 = set(v1.split(","))
     return CFDC(R,i1,v1,i2,v2)
 
-  def parse_CFDCs(sefl,filename):
+  @staticmethod
+  def parse_CFDCs(filename):
     with open(filename,"r") as cfdc_file:
       cfdcs = []
       lines = cfdc_file.read().splitlines()
       for line in lines:
-        cfdc = sefl.parse_CFDC(line)
+        cfdc = Parser.parse_CFDC(line)
         cfdcs.append(cfdc)
       return cfdcs
+
+  @staticmethod
+  def read_tcs(filename):
+    with open(filename, "r") as tc_file:
+      tcs = tc_file.read().splitlines()
+      return tcs
+
 
