@@ -3,7 +3,14 @@ from atom import Atom
 from rule import Rule
 from CFDC import CFDC
 
+#enable || parsing of TCs
+from multiprocessing import Pool
+
+import math
+
 class Parser():
+
+  num_of_cores_to_use = 8
 
   @staticmethod
   def parse_FK(input_str, enforced_semantics = False):
@@ -135,9 +142,36 @@ class Parser():
       return cfdcs
 
   @staticmethod
+  def parse_rules(list_of_lines):
+   return set(Parser.parse_rule(line) for line in list_of_lines)
+
+  @staticmethod
   def read_tcs(filename):
     with open(filename, "r") as tc_file:
-      tcs = tc_file.read().splitlines()
-      return tcs
+      lines = tc_file.read().splitlines()
+      k     = Parser.num_of_cores_to_use
+      pool  = Pool(k)
+      data_list = Parser.split_into_k(lines,k)
+      parsed_rule_list = pool.map(Parser.parse_rules, data_list)
+      parsed_rules = set()
+      for parsed in parsed_rule_list:
+        parsed_rules = parsed_rules.union(parsed)
+      return list(parsed_rules)
+
+  @staticmethod
+  def split_into_k(data,k):
+    size = len(data) 
+    chunk_size = int(math.ceil(size/float(k)))
+    chunks = []
+    for i in range(k):
+      left_bound = i*chunk_size
+      if (i+1)*chunk_size >= size:
+        right_bound = size
+      else:
+        right_bound = (i+1)*chunk_size
+      chunks.append(data[left_bound:right_bound])
+    return chunks
+
+
 
 

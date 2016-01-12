@@ -19,8 +19,7 @@ import math
 
 class CompletenessSolver():
 
-  num_of_cores_to_use = 8
-  min_number_of_tcs_per_chunk = 10000 #the case is not split, if there fewer TCs than this limit, determinted experimentally in the pre-testing
+  num_of_cores_to_use = Parser.num_of_cores_to_use
   
   @staticmethod
   def infer_rule(rule,grounding_set):
@@ -212,22 +211,15 @@ class CompletenessSolver():
     self.cfdc_file = cfdc_file
 
   def process_chunk(self, chunk):
-    inferred_list = self.process_rules(chunk.tcs, case_sub=chunk.substitution)
-    inferred = set()
-    for fact_set in inferred_list:
-      inferred = inferred.union(fact_set)
+    inferred = self.process_rules(chunk.tcs, case_sub=chunk.substitution)
     return inferred
-
 
 
   def split_into_chunks(self, cases_iter, case_vars, tcs):
     for case in cases_iter:
       yield Chunk(case, case_vars, tcs)
-          
 
-      
 
-  
   def read_FKs(self):
     fks_i = []
     fks_a = []
@@ -241,34 +233,20 @@ class CompletenessSolver():
     return fks_i, fks_a
 
 
-  def process_rules(self, data, case_sub=None):
+  def process_rules(self, rules, case_sub=None):
     inferred = set()
-    for indx, line in enumerate(data):
-      rule = Parser.parse_rule(line)
+    for rule in rules:
       grounded_rules = self.grounder.ground_rule(rule)
       inferred = inferred.union(self.infer(grounded_rules))
     return inferred
 
-  def split_tcs(self,data,k):
-    size = len(data) 
-    chunk_size = int(math.ceil(size/float(k)))
-    chunks = []
-    for i in range(k):
-      left_bound = i*chunk_size
-      if (i+1)*chunk_size >= size:
-        right_bound = size
-      else:
-        right_bound = (i+1)*chunk_size
-      chunks.append(data[left_bound:right_bound])
-    return chunks
-
-
+  
 
   def infer_TCs(self,filename):
     data = Parser.read_tcs(filename)
     k = self.num_of_cores_to_use
     pool = Pool(k)
-    data_list = self.split_tcs(data,k)
+    data_list = Parser.split_into_k(data,k)
     inferred_list = pool.map(self.process_rules, data_list)
     inferred = set()
     for fact_set in inferred_list:
