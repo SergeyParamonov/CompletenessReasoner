@@ -19,8 +19,6 @@ import math
 
 class CompletenessSolver():
 
-  num_of_cores_to_use = Parser.num_of_cores_to_use
-  
   @staticmethod
   def infer_rule(rule,grounding_set,case_sub=None):
     head, body = rule.get_tuple()
@@ -61,14 +59,14 @@ class CompletenessSolver():
     grouding_ideal_2_avail_atoms = set(self.clone_ideal_to_available_for_grounding(cased_grounding_set)) # we need to ground available atoms in FK_a using constants from ideal atoms too
     grounder          = Grounder(new_grounding_set | grouding_ideal_2_avail_atoms) 
     grounded_rules    = grounder.ground_rules(fks_a)
-    print("NEW GROUNDING SET", new_grounding_set)
-    print("FKS_GROUNDED",grounded_rules)
+  # print("NEW GROUNDING SET", new_grounding_set)
+  # print("FKS_GROUNDED",grounded_rules)
     old_inferred = new_grounding_set.copy()
     while True:
       new_inferred = self.infer(grounded_rules,grounding_set=old_inferred)
       inferred = set(new_inferred) | old_inferred
       if inferred == old_inferred:
-        print("NEW INFERRED", new_inferred)
+  #     print("NEW INFERRED", new_inferred)
         all_available = new_inferred | set(cased_inferred)
         return all_available
       else:
@@ -146,28 +144,33 @@ class CompletenessSolver():
       self.update_grounding_set(fks_i)
 
     #here we split cases and put them together for processing
-    self.cases, self.number_of_cases = self.create_cases()
-    self.cases_iter = product(*[self.cases[k] for k in self.cases.keys()]) 
-    self.cases_vars = list(self.cases.keys())
+    cases, number_of_cases = self.create_cases()
+    cases_iter = product(*[cases[k] for k in cases.keys()]) 
+    cases_vars = list(cases.keys())
 
 
-    tcs = Parser.read_tcs(self. tcs_file)
-    search_space_size = len(tcs) * self.number_of_cases
-    chunk_size       = search_space_size/self.num_of_cores_to_use
-    print("TCS len", len(tcs))
+    tcs = Parser.read_tcs(self.tcs_file)
+    search_space_size = len(tcs) * number_of_cases
+    chunk_size       = search_space_size/self.number_of_cores
+ #  print("TCS len", len(tcs))
     print("search space", search_space_size)
-    print("chunk size", chunk_size)
+ #  print("chunk size", chunk_size)
+    
+    if self.fk_semantics != "enforced":
+      fks_a = None
+    chunks = self.split_into_chunks(cases_iter, cases_vars, tcs, self.grounder.grounding_set, self, fks_a)
+    number_of_blobs = 10
+    blobs  = Parser.split_into_k(chunks,10)
+ 
 
-    chunks = self.split_into_chunks(self.cases_iter, self.cases_vars, tcs)
-
-    pool = Pool(self.num_of_cores_to_use)
-    processed = pool.map(self.process_chunk, chunks)
+  # pool = Pool(self.number_of_cores)
+  # processed = pool.map(self.process_chunk, chunks)
     is_complete = True
-    for i, output in enumerate(processed):
-      q_a, inferred_available, chunk = output
-      if not q_a:
-        print(chunk," is not complete")
-        is_complete = False
+  # for i, output in enumerate(processed):
+  #   q_a, inferred_available, chunk = output
+  #   if not q_a:
+  #     print(chunk," is not complete")
+  #     is_complete = False
 
     return is_complete 
     # print(i, q_a, inferred_available)
@@ -182,7 +185,7 @@ class CompletenessSolver():
       grounding_set = self.grounder.grounding_set
     inferred_facts = set()
     for rule in ground_rules:
-      inferred_fact = self.infer_rule(rule,grounding_set, case_sub=case_sub)
+      inferred_fact = self.infer_rule(rule, grounding_set, case_sub=case_sub)
       if inferred_fact:
         inferred_facts.add(inferred_fact)
     return inferred_facts
@@ -211,28 +214,22 @@ class CompletenessSolver():
       self.q_a      = self.create_q_a(head.strip(),body)
    
    
-  def __init__(self, query_file, tcs_file, cfdc_file=None, fk_file=None, fk_semantics=None, query_semantics="bag"):
+  def __init__(self, query_file, tcs_file, cfdc_file=None, fk_file=None, fk_semantics=None, query_semantics="bag", number_of_cores=None):
     self.query_file = query_file
     self.tcs_file = tcs_file
     self.fk_file  = fk_file
     self.fk_semantics = fk_semantics
     self.query_semantics = query_semantics
     self.cfdc_file = cfdc_file
+    if number_of_cores:
+      self.number_of_cores = number_of_cores
+    else:
+      self.number_of_cores = Parser.num_of_cores_to_use
 
-  def process_chunk(self, chunk):
-    inferred_available = self.process_rules(chunk.tcs, case_sub=chunk.substitution)
-
-    if self.is_fk_present and self.fk_semantics == "enforced":
-      inferred_available = self.apply_fks_a(fks_a, inferred, case_sub=chunk.substitution)
-
-    q_a_grounder   = Grounder(inferred_available)
-    grounded_rules = q_a_grounder.ground_rule(self.q_a)
-    q_a            = self.infer(grounded_rules,grounding_set=inferred_available, case_sub=chunk.substitution)
-    return q_a, inferred_available, chunk
-
-  def split_into_chunks(self, cases_iter, case_vars, tcs):
+  def split_into_chunks(self, cases_iter, case_vars, tcs, grounding_set, solver, fks_a):
+    grounder = Grounder(grounding_set)
     for case in cases_iter:
-      yield Chunk(case, case_vars, tcs)
+      yield Chunk(case, case_vars, tcs, grounder, solver, fks_a)
 
 
   def read_FKs(self):
@@ -248,18 +245,22 @@ class CompletenessSolver():
     return fks_i, fks_a
 
 
-  def process_rules(self, rules, case_sub=None):
+  def process_rules(self, rules, grounder=None, case_sub=None):
     inferred = set()
+    if grounder is None:
+      grounder = self.grounder
+    else:
+      grounder = grounder
     for rule in rules:
-      grounded_rules = self.grounder.ground_rule(rule)
-      inferred = inferred.union(self.infer(grounded_rules,case_sub=case_sub))
+      grounded_rules = grounder.ground_rule(rule)
+      inferred = inferred.union(self.infer(grounded_rules, grounding_set=grounder.grounding_set,case_sub=case_sub))
     return inferred
 
   
 
   def infer_TCs(self,filename):
     data = Parser.read_tcs(filename)
-    k = self.num_of_cores_to_use
+    k = self.number_of_cores
     pool = Pool(k)
     data_list = Parser.split_into_k(data,k)
     inferred_list = pool.map(self.process_rules, data_list)

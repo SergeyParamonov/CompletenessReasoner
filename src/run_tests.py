@@ -35,7 +35,7 @@ def run_test1():
   print("Grounding set")
   print(solver.grounder.grounding_set)
 
-def run_test2():
+def run_test2(k):
   p = Parser()
   experiment_folder = "../experiments/test2/"
   fdc_file = experiment_folder+"cfdcs"
@@ -43,7 +43,7 @@ def run_test2():
   tcs_file   = experiment_folder+"tcs"
 
   t0 = time.time()
-  solver = CompletenessSolver(query_file, tcs_file, fk_file=None, fk_semantics=None, cfdc_file=fdc_file, query_semantics="bag")
+  solver = CompletenessSolver(query_file, tcs_file, fk_file=None, fk_semantics=None, cfdc_file=fdc_file, query_semantics="bag", number_of_cores=k)
   q_a = solver.check_query()
   t1 = time.time()
   total_n = t1-t0
@@ -52,19 +52,21 @@ def run_test2():
   print('query results ',q_a)
 # print("inferred:",inferred)
   print("Total seconds {}".format(str(total_n)))
-  print("Grounding set")
-  print(solver.grounder.grounding_set)
-  print(solver.number_of_cases)
-  print(solver.cases_vars)
+# print("Grounding set")
+# print(solver.grounder.grounding_set)
+# print(solver.cases_vars)
 
 
 def main():
-  C = 10
-  S = 10
+  C = 1000
+  S = 100
+# k = 1
   print('test 2 generating C={C}, S={S}'.format(C=C,S=S))
   generate_test2(C,S)
   print('running')
-  run_test2()
+  for k in range(1,13):
+    print("number of cores: ", k)
+    run_test2(k)
 
 # C=1000
 # S=1000
