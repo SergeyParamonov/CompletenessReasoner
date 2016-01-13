@@ -6,6 +6,7 @@ from CFDC import CFDC
 #enable || parsing of TCs
 from multiprocessing import Pool
 
+from itertools import chain
 import math
 
 class Parser():
@@ -63,7 +64,7 @@ class Parser():
     fresh_var = "ZZZ_"
     non_functional_args = args[:]
     for indx, arg in enumerate(args):
-      if Parser.is_functional_term(arg):
+      if Atom.is_functional_term(arg):
         non_functional_args[indx] = fresh_var + str(indx)
     head = Atom(p +"_a", non_functional_args)
     body_to = Atom(p, non_functional_args)
@@ -101,21 +102,9 @@ class Parser():
       body.append(current_atom)
     return Rule(head, body)
 
-  @staticmethod                            
-  def is_functional_term(term):            
-    if "[" in term:                        
-      return True                          
-    else:                                  
-      return False  
+  
 
-  @staticmethod
-  def is_functional_atom(atom):
-    p, args = atom.get_tuple()
-    for term in args:
-      if Parser.is_functional_term(term):
-        return True
-    return False
-
+  
   @staticmethod
   def parse_CFDC(input_str): 
     escaped_str = input_str.replace(" ","")
@@ -141,9 +130,9 @@ class Parser():
         cfdcs.append(cfdc)
       return cfdcs
 
-  @staticmethod
-  def parse_rules(list_of_lines):
-   return set(Parser.parse_rule(line) for line in list_of_lines)
+  @classmethod
+  def parse_rules(cls,list_of_lines):
+   return [cls.parse_rule(line) for line in list_of_lines]
 
   @staticmethod
   def read_tcs(filename):
@@ -153,10 +142,8 @@ class Parser():
       pool  = Pool(k)
       data_list = Parser.split_into_k(lines,k)
       parsed_rule_list = pool.map(Parser.parse_rules, data_list)
-      parsed_rules = set()
-      for parsed in parsed_rule_list:
-        parsed_rules = parsed_rules.union(parsed)
-      return list(parsed_rules)
+      parsed_rules = list(chain(*parsed_rule_list))
+      return parsed_rules
 
   @staticmethod
   def split_into_k(data,k):

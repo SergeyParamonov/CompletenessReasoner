@@ -22,12 +22,12 @@ class CompletenessSolver():
   num_of_cores_to_use = Parser.num_of_cores_to_use
   
   @staticmethod
-  def infer_rule(rule,grounding_set):
+  def infer_rule(rule,grounding_set,case_sub=None):
     head, body = rule.get_tuple()
-    body_set   = set(body)
-    facts      = set(grounding_set)
+    body_set   = set([atom.get_case_substituted(case_sub) for atom in body])
+    facts      = set([atom.get_case_substituted(case_sub) for atom in grounding_set])
     if body_set.issubset(facts):
-      return head
+      return head.get_case_substituted(case_sub)
     else:
       return None
 
@@ -50,9 +50,15 @@ class CompletenessSolver():
     return atoms
 
 
-  def apply_fks_a(self, fks_a, inferred_available):
-    new_grounding_set = set(inferred_available) | set(self.grounder.grounding_set)
-    grouding_ideal_2_avail_atoms = set(self.clone_ideal_to_available_for_grounding(self.grounder.grounding_set)) # we need to ground available atoms in FK_a using constants from ideal atoms too
+  def apply_fks_a(self, fks_a, inferred_available, case_sub=None):
+    if case_sub is not None:
+      cased_inferred      = [atom.get_case_substituted(case_sub) for atom in inferred_available]
+      cased_grounding_set = [atom.get_case_substituted(case_sub) for atom in self.grounder.grounding_set]
+    else:
+      cased_inferred      = inferred_available
+      cased_grounding_set = self.grounder.grounding_set
+    new_grounding_set = set(cased_inferred) | set(cased_grounding_set)
+    grouding_ideal_2_avail_atoms = set(self.clone_ideal_to_available_for_grounding(cased_grounding_set)) # we need to ground available atoms in FK_a using constants from ideal atoms too
     grounder          = Grounder(new_grounding_set | grouding_ideal_2_avail_atoms) 
     grounded_rules    = grounder.ground_rules(fks_a)
     print("NEW GROUNDING SET", new_grounding_set)
@@ -63,7 +69,7 @@ class CompletenessSolver():
       inferred = set(new_inferred) | old_inferred
       if inferred == old_inferred:
         print("NEW INFERRED", new_inferred)
-        all_available = new_inferred | set(inferred_available)
+        all_available = new_inferred | set(cased_inferred)
         return all_available
       else:
         old_inferred = inferred.copy()
@@ -122,7 +128,7 @@ class CompletenessSolver():
     # ground and evaluate the query
     grounded_rules     = q_a_grounder.ground_rule(self.q_a)
     q_a                = self.infer(grounded_rules,grounding_set=inferred_available)
-    return q_a, inferred_available
+    return q_a
      
 
   def check_query(self):
@@ -132,11 +138,10 @@ class CompletenessSolver():
     else:
       return check_query_without_cases()
     
-    
 
-    is_fk_present = self.fk_file and self.fk_semantics
+    self.is_fk_present = self.fk_file and self.fk_semantics
     fks_a = [] # default empty rules for fk_a
-    if is_fk_present: 
+    if self.is_fk_present: 
       fks_i, fks_a = self.read_FKs()
       self.update_grounding_set(fks_i)
 
@@ -154,26 +159,32 @@ class CompletenessSolver():
     print("chunk size", chunk_size)
 
     chunks = self.split_into_chunks(self.cases_iter, self.cases_vars, tcs)
-   
 
-    inferred_available = self.infer_TCs(self.tcs_file)
+    pool = Pool(self.num_of_cores_to_use)
+
+    
+    processed = pool.map(self.process_chunk, chunks)
+    is_complete = True
+    for i, output in enumerate(processed):
+      q_a, inferred_available, chunk = output
+      if not q_a:
+        print(chunk," is not complete")
+        is_complete = False
+
+    return is_complete 
+    # print(i, q_a, inferred_available)
+
+#   inferred_available = self.infer_TCs(self.tcs_file)
 
     # apply enforced fk rules and get new available atoms
-    if is_fk_present and self.fk_semantics == "enforced":
-      inferred_available = self.apply_fks_a(fks_a, inferred_available)
-
-    q_a_grounder       = Grounder(inferred_available)
-    grounded_rules     = q_a_grounder.ground_rule(self.q_a)
-    q_a                = self.infer(grounded_rules,grounding_set=inferred_available)
-    return q_a, inferred_available
-    
+        
   
-  def infer(self, ground_rules,grounding_set=None):
+  def infer(self, ground_rules,grounding_set=None, case_sub=None):
     if grounding_set is None:
       grounding_set = self.grounder.grounding_set
     inferred_facts = set()
     for rule in ground_rules:
-      inferred_fact = self.infer_rule(rule,grounding_set)
+      inferred_fact = self.infer_rule(rule,grounding_set, case_sub=case_sub)
       if inferred_fact:
         inferred_facts.add(inferred_fact)
     return inferred_facts
@@ -211,9 +222,15 @@ class CompletenessSolver():
     self.cfdc_file = cfdc_file
 
   def process_chunk(self, chunk):
-    inferred = self.process_rules(chunk.tcs, case_sub=chunk.substitution)
-    return inferred
+    inferred_available = self.process_rules(chunk.tcs, case_sub=chunk.substitution)
 
+    if self.is_fk_present and self.fk_semantics == "enforced":
+      inferred_available = self.apply_fks_a(fks_a, inferred, case_sub=chunk.substitution)
+
+    q_a_grounder   = Grounder(inferred_available)
+    grounded_rules = q_a_grounder.ground_rule(self.q_a)
+    q_a            = self.infer(grounded_rules,grounding_set=inferred_available, case_sub=chunk.substitution)
+    return q_a, inferred_available, chunk
 
   def split_into_chunks(self, cases_iter, case_vars, tcs):
     for case in cases_iter:
@@ -237,7 +254,7 @@ class CompletenessSolver():
     inferred = set()
     for rule in rules:
       grounded_rules = self.grounder.ground_rule(rule)
-      inferred = inferred.union(self.infer(grounded_rules))
+      inferred = inferred.union(self.infer(grounded_rules,case_sub=case_sub))
     return inferred
 
   
@@ -253,24 +270,14 @@ class CompletenessSolver():
       inferred = inferred.union(fact_set)
     return inferred
 
-  @staticmethod
-  def equal_upto_functional_terms(atom1, atom2):
-    p1, args1 = atom1.get_tuple()
-    p2, args2 = atom2.get_tuple()
-    if p1 != p2:
-      return False
-    for term1, term2 in zip(args1,args2):  
-      if (term1 != term2) and not (Parser.is_functional_term(term1) or Parser.is_functional_term(term2)):
-        return False
-    return True
-  
+    
                                              
   def clean_after_FK(self,grounding_set):                
     grounding_set     = grounding_set[:]
     new_grounding_set = grounding_set[:]
     for atom1, atom2 in product(grounding_set, grounding_set):
-      if atom1 > atom2 and self.equal_upto_functional_terms(atom1,atom2):
-        if Parser.is_functional_atom(atom1):
+      if atom1 > atom2 and atom1.equal_upto_functional_terms(atom2):
+        if atom1.is_functional_atom():
           new_grounding_set.remove(atom1)
         else:
           new_grounding_set.remove(atom2)

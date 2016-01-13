@@ -65,7 +65,7 @@ class Grounder():
     p, args = atom.get_tuple()
     new_args = args[:]
     for pos,arg in enumerate(args):
-      if not Parser.is_functional_term(arg):
+      if not Atom.is_functional_term(arg):
         try:
           index = variables.index(arg)
           new_args[pos] = sub[index]

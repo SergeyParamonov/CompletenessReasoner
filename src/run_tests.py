@@ -44,13 +44,13 @@ def run_test2():
 
   t0 = time.time()
   solver = CompletenessSolver(query_file, tcs_file, fk_file=None, fk_semantics=None, cfdc_file=fdc_file, query_semantics="bag")
-  q_a, inferred = solver.check_query()
+  q_a = solver.check_query()
   t1 = time.time()
   total_n = t1-t0
 
   print(solver.q_a)
   print('query results ',q_a)
-  print("inferred:",inferred)
+# print("inferred:",inferred)
   print("Total seconds {}".format(str(total_n)))
   print("Grounding set")
   print(solver.grounder.grounding_set)
