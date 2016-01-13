@@ -161,8 +161,6 @@ class CompletenessSolver():
     chunks = self.split_into_chunks(self.cases_iter, self.cases_vars, tcs)
 
     pool = Pool(self.num_of_cores_to_use)
-
-    
     processed = pool.map(self.process_chunk, chunks)
     is_complete = True
     for i, output in enumerate(processed):
