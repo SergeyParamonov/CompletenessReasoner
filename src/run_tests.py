@@ -15,6 +15,7 @@ import time
 from multiprocessing import Pool
 from itertools import product
 import math
+import os
 
                                            
 def run_test1():
@@ -35,7 +36,7 @@ def run_test1():
   print("Grounding set")
   print(solver.grounder.grounding_set)
 
-def run_test2(k):
+def run_test2():
   p = Parser()
   experiment_folder = "../experiments/test2/"
   fdc_file = experiment_folder+"cfdcs"
@@ -43,6 +44,7 @@ def run_test2(k):
   tcs_file   = experiment_folder+"tcs"
 
   t0 = time.time()
+  k  = 1
   solver = CompletenessSolver(query_file, tcs_file, fk_file=None, fk_semantics=None, cfdc_file=fdc_file, query_semantics="bag", number_of_cores=k)
   q_a = solver.check_query()
   t1 = time.time()
@@ -59,14 +61,12 @@ def run_test2(k):
 
 def main():
   C = 1000
-  S = 100
+  S = 1000
 # k = 1
   print('test 2 generating C={C}, S={S}'.format(C=C,S=S))
   generate_test2(C,S)
   print('running')
-  for k in range(1,13):
-    print("number of cores: ", k)
-    run_test2(k)
+  run_test2()
 
 # C=1000
 # S=1000

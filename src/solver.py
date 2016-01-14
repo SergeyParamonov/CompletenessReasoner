@@ -15,9 +15,35 @@ import time
 from multiprocessing import Pool
 from itertools import product
 import math
+import pickle
+import paramiko
+import os
 
+done_keyword = "DONE+"
 
 class CompletenessSolver():
+  blob_folder = "tmp/blobs/blob"
+  results_folder = "sync/worker_results"
+  
+  def distribute(self,number_of_blobs, results_folder):
+    username = os.environ["SSH_USERNAME"]
+    password = os.environ["SSS_PASSWORD"]
+    servers  = ["pinac3{}.cs.kuleuven.be".format(i) for i in range(1,number_of_blobs+1)]
+
+    for blob_id, server in enumerate(servers):
+      ssh = paramiko.SSHClient()
+      ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+      ssh.connect(server, username=username, password=password)
+      cmd_to_execute = "cd CompletenessReasoner/src; python3 worker.py {blob_id}; exit".format(blob_id=blob_id)
+      ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(cmd_to_execute)
+   
+    self.create_sync_files(results_folder, number_of_blobs)
+
+  def create_sync_files(self,results_folder, number_of_blobs):
+    for blob in range(number_of_blobs):
+      with open(results_folder+str(blob),"w") as create_file:
+        pass
+
 
   @staticmethod
   def infer_rule(rule,grounding_set,case_sub=None):
@@ -158,13 +184,67 @@ class CompletenessSolver():
     
     if self.fk_semantics != "enforced":
       fks_a = None
-    chunks = self.split_into_chunks(cases_iter, cases_vars, tcs, self.grounder.grounding_set, self, fks_a)
-    number_of_blobs = 10
-    blobs  = Parser.split_into_k(chunks,10)
- 
+    chunks = list(self.split_into_chunks(cases_iter, cases_vars, tcs, self.grounder.grounding_set, self, fks_a))
+    number_of_blobs = 5
+    blobs  = Parser.split_into_k(chunks,number_of_blobs)
+
+    print("time before saving chunks:", "{0:.2f}".format(time.time()-self.solver_creation_time))
+    for i, blob in enumerate(blobs):
+        self.save_chunks(blob, self.blob_folder+"{}".format(str(i)))
+
+    print("time before distr:", "{0:.2f}".format(time.time()-self.solver_creation_time))
+    self.distribute(number_of_blobs, self.results_folder)
+    print("distributed tasks, waiting for results...")
+    print("time after distr:", "{0:.2f}".format(time.time()-self.solver_creation_time))
+    is_complete, errors = CompletenessSolver.merge_results(number_of_blobs, self.results_folder)
+   
+    return is_complete 
+  
+  @staticmethod
+  def merge_results(number_of_blobs, results_folder):
+    CHECK_EXECUTION_ONCE_IN_SECONDS = 3
+    all_done = False
+    overall_complete = True
+    errors = [] # not complete blobs
+    while not all_done:
+      time.sleep(CHECK_EXECUTION_ONCE_IN_SECONDS)
+      all_done = True
+      for blob in range(number_of_blobs):
+        all_done, is_complete = CompletenessSolver.check_done_blob(blob, results_folder)
+        if all_done and not is_complete:
+          overall_complete = False
+          errors.append(blob)
+
+    print(errors)
+    if not errors:
+      errors = None
+    return overall_complete, errors
+    
+  @staticmethod
+  def check_done_blob(blob, results_folder):
+    filename = results_folder+str(blob)
+    with open(filename, "r") as results:
+      lines = results.read().splitlines()
+      if len(lines) < 3:
+        for line in lines:
+          print(line)
+        return False, None
+      if lines[-1] == done_keyword:
+        if lines[-2] == "COMPLETE":
+          is_complete = True
+        else:
+          is_complete = False
+        return True, is_complete
+      else:
+        return False, None
+
+  # for i, blob in enumerate(blobs):
+  #   print("processing {}-th blob".format(i))
+  #   self.process_blob(self.number_of_cores,blob)
+
 
   # pool = Pool(self.number_of_cores)
-  # processed = pool.map(self.process_chunk, chunks)
+  # processed = pool.map_async(self.process_chunk, chunks)
     is_complete = True
   # for i, output in enumerate(processed):
   #   q_a, inferred_available, chunk = output
@@ -172,12 +252,38 @@ class CompletenessSolver():
   #     print(chunk," is not complete")
   #     is_complete = False
 
-    return is_complete 
     # print(i, q_a, inferred_available)
 
 #   inferred_available = self.infer_TCs(self.tcs_file)
 
     # apply enforced fk rules and get new available atoms
+
+  # this is only defined so we can pickle and use process_chunk of a chunk
+  # in || exectution
+   
+  @classmethod
+  def process_chunk(cls,chunk):
+    return chunk.process_chunk()
+   
+  def process_blob(self, cores, blob):
+    pool = Pool(cores)
+    results = pool.map_async(CompletenessSolver.process_chunk, blob).get()
+    pool.close()
+    for i,output in enumerate(results):
+      q_a, inferred = output
+      if not q_a:
+        print("not complete for the case: "+str(i))
+
+
+  
+  def save_chunks(self,list_of_chunks, filename):
+    with open(filename, "wb") as outputfile:
+      pickle.dump(list_of_chunks, outputfile)
+    
+  
+  def load_chunks(self, filename):
+    with open(filename, "rb") as inputfile:
+      return pickle.load(inputfile)
         
   
   def infer(self, ground_rules,grounding_set=None, case_sub=None):
@@ -208,13 +314,16 @@ class CompletenessSolver():
   def read_query(self,filename):
     with open(filename, "r") as q_file:
       query_str     = q_file.read().strip(" \n\r\t")
-      head, body    = query_str.split(":-")
-      grounding_set = Parser.parse_atoms(body)
-      self.grounder = Grounder(grounding_set)
-      self.q_a      = self.create_q_a(head.strip(),body)
+    head, body    = query_str.split(":-")
+    grounding_set = Parser.parse_atoms(body)
+    self.grounder = Grounder(grounding_set)
+    self.q_a      = self.create_q_a(head.strip(),body)
    
    
   def __init__(self, query_file, tcs_file, cfdc_file=None, fk_file=None, fk_semantics=None, query_semantics="bag", number_of_cores=None):
+    self.solver_creation_time = time.time()
+    os.system("rm " + self.blob_folder + "*")
+    os.system("rm " + self.results_folder + "*")
     self.query_file = query_file
     self.tcs_file = tcs_file
     self.fk_file  = fk_file
@@ -237,11 +346,11 @@ class CompletenessSolver():
     fks_a = []
     with open(self.fk_file,"r") as fk_file:
       fks_str = fk_file.read().splitlines()
-      for fk_str in fks_str:
-        fk_i,fk_a = Parser.parse_FK(fk_str, self.fk_semantics)
-        if fk_a:
-          fks_a.append(fk_a)
-        fks_i.append(fk_i)
+    for fk_str in fks_str:
+      fk_i,fk_a = Parser.parse_FK(fk_str, self.fk_semantics)
+      if fk_a:
+        fks_a.append(fk_a)
+      fks_i.append(fk_i)
     return fks_i, fks_a
 
 
@@ -256,15 +365,14 @@ class CompletenessSolver():
       inferred = inferred.union(self.infer(grounded_rules, grounding_set=grounder.grounding_set,case_sub=case_sub))
     return inferred
 
-  
 
   def infer_TCs(self,filename):
     data = Parser.read_tcs(filename)
-    k = self.number_of_cores
+    k    = self.number_of_cores
     pool = Pool(k)
     data_list = Parser.split_into_k(data,k)
-    inferred_list = pool.map(self.process_rules, data_list)
-    inferred = set()
+    inferred_list = pool.map_async(self.process_rules, data_list)
+    inferred      = set()
     for fact_set in inferred_list:
       inferred = inferred.union(fact_set)
     return inferred
