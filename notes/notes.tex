@@ -13,7 +13,7 @@
 
 
 \author{Authors}
-\title{Towards a Domain Specific Solver for Query Completeness Problem under Constraints}
+\title{Towards a Domain Specific Solver for Query Completeness Reasoning under Constraints}
 \begin{document}
 \maketitle
 
@@ -38,19 +38,19 @@ There is a number of assumptions that always hold for TC-QC reasoning but they a
 \begin{enumerate}
   \item Given FDC and the query get all the cases
   \item For a case in the cases do the following
-  \item Apply substitution and ideal FKs
-  \item Apply TCs 
+  \item Apply substitution and ideal FKs to the ideal query atoms
+  \item Apply TCs to get available set
   \item Apply available FKs to extend available set
   \item Apply substitution to the query and evaluate it on the set of available atoms
 \end{enumerate}
 
 ASP cannot guess the optimal order and perform optimal grounding, it has to work in the assumption that other complex constraints can be always added.
 
-I.e. the ASP programs for two fixed cases are independent. 
+An example of such assumption -- the ASP programs for two fixed cases are independent (which means all the other values in the FDC should not be used for grounding). 
 
 \paragraph{Crucial assumptions} when we reason to establish TC-QC completeness we assume a fixed set of constraints: no aggregates, no unstratified negation, no complicated cyclic dependencies. It is a complete set of database constraints: FDC, FK (2 versions) and TC and nothing else! Furthermore, there is a natural execution and grounding order in the problem.
 
-\paragraph{Crucial design problem} ASP is not designed as a parallel or distributed engine for solving simple constraints, it is designed as a solver of extremely complex combinations of constraints in a modest amount (I mean a few but very complicated constraints). There is no notation of locality in ASP, I mean we can look at each TC statement separately given the case and the query atoms (chased by FK).
+\paragraph{Crucial design problem} ASP is not designed as a parallel or distributed engine for solving simple constraints, it is designed as a solver of extremely complex combinations of constraints in a modest amount (I mean a few but very complicated constraints). There is no notation of locality in ASP, I mean we can look at each TC statement separately given the case and the query atoms (chased by FK), but ASP has no mechanism to mimic it (and typically it is not the case for CP/SAT/ASP).
 
 \section{Possible solution} 
 Based on the ASP encoding and the characterization theorems build a domain specific solver. What is that? A datalog engine that only support the set of specified constraints such as FDC, FK (in 2 forms), TCs and QC under set and bag semantics.
@@ -59,9 +59,9 @@ Based on the ASP encoding and the characterization theorems build a domain speci
 
 \paragraph{Bad news :-( } We would have to implement a parser, a grounder, a simple datalog engine, a distributed computational engine to gather it together.
 
-\paragraph{Good news :-)} That what I have figuring out and slowly developing for the last half a year (basically I have done most of the work, like 90\%, in my free time). There are a lot of difficult technical details like you would need to execute TC statement only once but FKs require a Tp operator and so on.
+\paragraph{Good news :-)} That what I have been figuring it all out and slowly developing the solver for the last half a year (basically I have done most of the work, like 90\%, in my free time). There are a lot of difficult technical details like you would need to execute TC statement only once but FKs require a Tp operator and so on.
 
-What I have made so far is a prototype that supports QC under set and bag semantics, FKs both enforced and not enforced, FDCs (no CFDC yet though), TCs and || execution distributed across multiple machines.
+What I have made so far is a prototype that supports QC under set and bag semantics, FKs both enforced and not enforced, FDCs (no CFDC yet though), TCs and parallel execution distributed across multiple machines.
 
 \section{The main question}
 What can we make out of it? I think it would be hard to demonstrate that any realistic test case with let's say 10 relations in the query would cannot be handled (I think most of the Prolog implementations cannot even allocate enough memory to store enough rules -- unless they are short and simple).
@@ -70,6 +70,8 @@ We can show that the approach scales with the number of machines to be distribut
 
 
 Prototype is available at (yet; very experimental and preliminary)
-\url{
+\begin{center}
+\url{https://github.com/SergeyParamonov/CompletenessReasoner}
+\end{center}
 
 \end{document}
