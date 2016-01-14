@@ -3,11 +3,9 @@
 \usepackage{listings}	
 \usepackage{enumerate}
 \usepackage{layouts}
-%\usepackage[english]{babel}
 \usepackage{times}
 \usepackage[numbers]{natbib}
 \usepackage{notoccite}
-%\usepackage{cite}
 \usepackage{url}
 \usepackage{xspace}
 \usepackage{tikz}
@@ -20,5 +18,58 @@
 \maketitle
 
 \section{What is wrong with ASP encoding for TC-QC}
+
+There is a number of things that makes potentially any encoding based purely on ASP inefficient and for sure non-scalable.
+
+\begin{enumerate}
+  \item It does not make any strong assumptions on the shape of the constraints or their relations: ASP has to work as a \textit{generic} modeling language -- it is not designed for a particular problem or domain, so it is unreasonable to expect ASP to do the propagation a human would
+  \item An ASP program is \textit{global}: it does not look at the constraints independently of other constraints, i.e., it assumes constraint non-monotonicity, when constraints interact in a complex manner
+  \item ASP generally does not support scalability features such as parallel or distributed execution
+\end{enumerate}
+
+Let me briefly point out why it is a good idea to make a prototype in ASP but at least in this case it is unpractical as a real system.
+
+\paragraph{Pro:} ASP is a rich, flexible and expressive language. It was designed to capture non-monotonicity and handle multiple models. With its formal semantics you can prove that our models are in fact correct.
+
+There is a number of assumptions that always hold for TC-QC reasoning but they are never explicitly present and neither can be incorporated in an ASP model due to the fact that the language 
+\paragraph{Contra:} TCs are always independent and can be only initialized with atoms in the query Q (or if there are FK, with the ideal chase (Q)), but the solver does not know this! Basically we have a strict evaluation order, which is the following:
+\pagebreak
+
+\begin{enumerate}
+  \item Given FDC and the query get all the cases
+  \item For a case in the cases do the following
+  \item Apply substitution and ideal FKs
+  \item Apply TCs 
+  \item Apply available FKs to extend available set
+  \item Apply substitution to the query and evaluate it on the set of available atoms
+\end{enumerate}
+
+ASP cannot guess the optimal order and perform optimal grounding, it has to work in the assumption that other complex constraints can be always added.
+
+I.e. the ASP programs for two fixed cases are independent. 
+
+\paragraph{Crucial assumptions} when we reason to establish TC-QC completeness we assume a fixed set of constraints: no aggregates, no unstratified negation, no complicated cyclic dependencies. It is a complete set of database constraints: FDC, FK (2 versions) and TC and nothing else! Furthermore, there is a natural execution and grounding order in the problem.
+
+\paragraph{Crucial design problem} ASP is not designed as a parallel or distributed engine for solving simple constraints, it is designed as a solver of extremely complex combinations of constraints in a modest amount (I mean a few but very complicated constraints). There is no notation of locality in ASP, I mean we can look at each TC statement separately given the case and the query atoms (chased by FK).
+
+\section{Possible solution} 
+Based on the ASP encoding and the characterization theorems build a domain specific solver. What is that? A datalog engine that only support the set of specified constraints such as FDC, FK (in 2 forms), TCs and QC under set and bag semantics.
+
+\subsection{Why would it work?} We already have the optimal execution order and the optimal grounding schema. We know how to solve FDC analytically (and CFDC, if it matters). Then the question is to parallelize and distribute simple datalog computations in the right order on a set of machines and that would make use of several cores.
+
+\paragraph{Bad news :-( } We would have to implement a parser, a grounder, a simple datalog engine, a distributed computational engine to gather it together.
+
+\paragraph{Good news :-)} That what I have figuring out and slowly developing for the last half a year (basically I have done most of the work, like 90\%, in my free time). There are a lot of difficult technical details like you would need to execute TC statement only once but FKs require a Tp operator and so on.
+
+What I have made so far is a prototype that supports QC under set and bag semantics, FKs both enforced and not enforced, FDCs (no CFDC yet though), TCs and || execution distributed across multiple machines.
+
+\section{The main question}
+What can we make out of it? I think it would be hard to demonstrate that any realistic test case with let's say 10 relations in the query would cannot be handled (I think most of the Prolog implementations cannot even allocate enough memory to store enough rules -- unless they are short and simple).
+
+We can show that the approach scales with the number of machines to be distributed to and can potentially handle realistic input. Can we think of an actual realistic scenario where we can clearly measure the parameters of the problem and demonstrate that the system indeed can handle it?
+
+
+Prototype is available at (yet; very experimental and preliminary)
+\url{
 
 \end{document}
