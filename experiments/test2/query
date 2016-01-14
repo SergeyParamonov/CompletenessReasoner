@@ -1,0 +1,1 @@
+q(N) :- pupil(N, C, S); class(C, S, 1, B); school(S, SC, T); schoolcluster(SC, D, pub).

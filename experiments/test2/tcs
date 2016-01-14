@@ -1,0 +1,4 @@
+pupil_a(N,C,S) :- pupil(N,C,S).
+class_a(C, S, 1, B) :- class(C, S, 1, B).
+school_a(S, SC, T) :- school(S, SC, T).
+schoolcluster_a(SC, D, pub) :- schoolcluster(SC, D, pub).
